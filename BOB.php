@@ -827,7 +827,7 @@ class BOB
 			
 			# Obtain the current fields; no error handling needed as we know that the table exists; the escaping is used just in case the admin has specified a stupid table name in the config, though this is not a security issue
 			# Note there is no problem if this table has additional fields - these will be ignored in the mergeConfiguration() routine and will never get past that into the rest of the system
-			$query = "SELECT * FROM `{$this->config['dbDatabase']}`.`{$this->config['dbConfigTable']}` WHERE id = '" . mysql_real_escape_string ($this->config['id']) . "' LIMIT 1;";
+			$query = "SELECT * FROM `{$this->config['dbDatabase']}`.`{$this->config['dbConfigTable']}` WHERE id = '" . mysqli_real_escape_string ($this->databaseConnection, $this->config['id']) . "' LIMIT 1;";
 			if (!$data = $this->getData ($query)) {
 				
 				# If there is no staging database specified, throw an error
@@ -837,7 +837,7 @@ class BOB
 				} else {
 					
 					# Now try to fallback to the staging database, ensuring that it is for a ballot that has not yet opened (which therefore prevents the use of the staging database for live votes)
-					$query = "SELECT * FROM `{$this->config['dbDatabaseStaging']}`.`{$this->config['dbConfigTable']}` WHERE id = '" . mysql_real_escape_string ($this->config['id']) . "' AND NOW() < ballotStart LIMIT 1;";
+					$query = "SELECT * FROM `{$this->config['dbDatabaseStaging']}`.`{$this->config['dbConfigTable']}` WHERE id = '" . mysqli_real_escape_string ($this->databaseConnection, $this->config['id']) . "' AND NOW() < ballotStart LIMIT 1;";
 					if (!$data = $this->getData ($query)) {
 						$this->errors[] = "A database-stored configuration in the '<strong>" . htmlspecialchars ("{$this->config['dbDatabaseStaging']}.{$this->config['dbConfigTable']}") . "</strong>' staging table for an election with id '<strong>" . htmlspecialchars ($this->config['id']) . "</strong>' was specified but it could not be retrieved.";
 						return false;
@@ -1386,21 +1386,21 @@ class BOB
 	private function openDatabaseConnection ($dbUsername)
 	{
 		# Connect to the database as the specified user
-		if (!$this->databaseConnection = @mysql_connect ($this->config['dbHostname'], $dbUsername, $this->config['dbPassword'])) {
-			$this->errors[] = "Error opening database connection with the database username '<strong>" . htmlspecialchars ($dbUsername) . "</strong>'. The database server said: '<em>" . htmlspecialchars (mysql_error ()) . "</em>'";
+		if (!$this->databaseConnection = @mysqli_connect ($this->config['dbHostname'], $dbUsername, $this->config['dbPassword'])) {
+			$this->errors[] = "Error opening database connection with the database username '<strong>" . htmlspecialchars ($dbUsername) . "</strong>'. The database server said: '<em>" . htmlspecialchars (mysqli_error ()) . "</em>'";
 			return false;
 		}
 		
 		# Ensure we are talking in Unicode
-		if (!mysql_query ("SET NAMES 'utf8';")) {
+		if (!mysqli_query ($this->databaseConnection, "SET NAMES 'utf8';")) {
 			$this->errors[] = "Error setting the database connection to UTF-8";
 			return false;
 		}
 		
 		# Connect to the database
-		if (!@mysql_select_db ($this->config['dbDatabase'], $this->databaseConnection)) {
+		if (!@mysqli_select_db ($this->databaseConnection, $this->config['dbDatabase'])) {
 			$this->databaseConnection = NULL;
-			$this->errors[] = "Error selecting the database '<strong>" . htmlspecialchars ($this->config['dbDatabase']) . "</strong>'. Check it exists and that the user {$dbUsername} has rights to it. The database server said: '<em>" . htmlspecialchars (mysql_error ()) . "</em>'";
+			$this->errors[] = "Error selecting the database '<strong>" . htmlspecialchars ($this->config['dbDatabase']) . "</strong>'. Check it exists and that the user {$dbUsername} has rights to it. The database server said: '<em>" . htmlspecialchars (mysqli_error ()) . "</em>'";
 			return false;
 		}
 		
@@ -1414,7 +1414,7 @@ class BOB
 	{
 		# Explicitly close the administrative database connection so that it cannot be reused
 		if ($this->databaseConnection) {
-			mysql_close ($this->databaseConnection);
+			mysqli_close ($this->databaseConnection);
 			$this->databaseConnection = NULL;
 		}
 	}
@@ -1569,7 +1569,7 @@ class BOB
 		$query = "CREATE TABLE `{$name}` (" . implode (', ', $fieldsSql) . ") ENGINE=InnoDB CHARACTER SET utf8 COLLATE utf8_unicode_ci;";
 		
 		# Create the table
-		if (!mysql_query ($query)) {
+		if (!mysqli_query ($this->databaseConnection, $query)) {
 			$this->errors[] = "There was a problem setting up the {$name} table.";
 			return false;
 		}
@@ -1587,16 +1587,18 @@ class BOB
 		$data = array ();
 		
 		# Execute the query or return false on failure
-		if ($result = mysql_query ($query)) {
+		if ($result = mysqli_query ($this->databaseConnection, $query)) {
 			
 			# Check that the table contains data
-			if (mysql_num_rows ($result) > 0) {
+			if (mysqli_num_rows ($result) > 0) {
 				
 				# Loop through each row and add the data to it
-				while ($row = mysql_fetch_assoc ($result)) {
+				while ($row = mysqli_fetch_assoc ($result)) {
 					$data[] = $row;
 				}
 			}
+
+			mysqli_free_result ($result);
 		}
 		
 		# Return the array
@@ -1615,12 +1617,12 @@ class BOB
 		$tables = array ();
 		
 		# Get the tables
-		if (!$tablesList = mysql_query ($query)) {
+		if (!$tablesList = mysqli_query ($this->databaseConnection, $query)) {
 			return $tables;
 		}
 		
 		# Loop through the table resource to get the list of tables
-		while ($tableDetails = mysql_fetch_row ($tablesList)) {
+		while ($tableDetails = mysqli_fetch_row ($tablesList)) {
 			$tables[] = $tableDetails[0];
 		}
 		
@@ -1780,11 +1782,11 @@ class BOB
 		if ($username === false) {$username = $this->username;}
 		
 		# Get the user's details; there is no need for any error handling as readability will have been checked in verifyRuntimeDatabasePrivileges()
-		$query = "SELECT username,voted FROM `{$this->voterTable}` WHERE username='" . mysql_real_escape_string ($username) . "'";
-		$result = mysql_query ($query);
+		$query = "SELECT username,voted FROM `{$this->voterTable}` WHERE username='" . mysqli_real_escape_string ($this->databaseConnection, $username) . "'";
+		$result = mysqli_query ($this->databaseConnection, $query);
 		
 		# Determine if the user is registered
-		$row = mysql_fetch_assoc ($result);
+		$row = mysqli_fetch_assoc ($result);
 		$userIsRegisteredVoter = ($row ? true : false);	// ($row) is a boolean cast in PHP but this ternary form is more explicit
 		
 		# Determine if the user has voted; clearly this will be false if they are not registered
@@ -2350,8 +2352,8 @@ class BOB
     $tokenChosen = false;
 	while (!$tokenChosen) {
 		$token = $this->generateToken();
-	    if(!($result = mysql_query("SELECT COUNT(token) AS total FROM `{$this->votesTable}` WHERE token='{$token}'"))) return($this->error ("Token checking failed. The vote submission could not proceed."));
-	    if(!($row = mysql_fetch_assoc($result))) return($this->error ("Token checking failed (2). The vote submission could not proceed."));
+	    if(!($result = mysqli_query($this->databaseConnection, "SELECT COUNT(token) AS total FROM `{$this->votesTable}` WHERE token='{$token}'"))) return($this->error ("Token checking failed. The vote submission could not proceed."));
+	    if(!($row = mysqli_fetch_assoc($result))) return($this->error ("Token checking failed (2). The vote submission could not proceed."));
 		if ($row['total'] == '0') {$tokenChosen = true;}	// If there are no matching tokens, then accept this one
 	}
 	
@@ -2393,7 +2395,7 @@ class BOB
 		}
 		
 		// Start transaction.
-		if (!mysql_query ('BEGIN WORK;')) {
+		if (!mysqli_query ($this->databaseConnection, 'BEGIN WORK;')) {
 			echo "\n<p>Recording your vote ...</p>";
 			return $this->error ('Failed to start database transaction.');
 		}
@@ -2409,21 +2411,21 @@ class BOB
 		$colv = "'{$token}'" . $colv;
 		
 		// Record data from the ballot HTML form along with random token.
-		if (!mysql_query ("INSERT INTO `{$this->votesTable}` ({$coln}) VALUES ({$colv});") or mysql_affected_rows() != 1) {
+		if (!mysqli_query ($this->databaseConnection, "INSERT INTO `{$this->votesTable}` ({$coln}) VALUES ({$colv});") or mysqli_affected_rows($this->databaseConnection) != 1) {
 			echo "\n<p>Recording your vote ...</p>";
 			$this->doRollback ();
 			return $this->error ('Database vote insert failure.');
 		}
 		
 		// Modify the voter table to indicate this vote has been cast
-		if (!mysql_query ("UPDATE `{$this->voterTable}` SET voted = '1' WHERE username='{$this->username}' AND voted = '0';") or mysql_affected_rows () != 1) {
+		if (!mysqli_query ($this->databaseConnection, "UPDATE `{$this->voterTable}` SET voted = '1' WHERE username='{$this->username}' AND voted = '0';") or mysqli_affected_rows ($this->databaseConnection) != 1) {
 			echo "\n<p>Recording your vote ...</p>";
 			$this->doRollback ();
 			return $this->error ('Recording voter as having voted failed. As such, the vote itself has not been stored either.');
 		}
 		
 		# Commit the transaction
-		if (!mysql_query ('COMMIT;')) {
+		if (!mysqli_query ($this->databaseConnection, 'COMMIT;')) {
 			echo "\n<p>Recording your vote ...</p>";
 			$this->doRollback ();
 			return $this->error ('Transaction failed to commit.');
@@ -2438,12 +2440,12 @@ class BOB
 		$html .= "\n<p>In the highly unusual case that there is a failure somewhere in the remainder of this voting process, you should keep a record of your proof-of-voting token '<strong>{$token}</strong>' and use it to check your vote really was recorded correctly when the count sheet is posted up after voting has closed.</p>";
 		
 		// Create e-mail body containing ballot information
-		if (!$result = mysql_query ("SELECT * FROM `{$this->votesTable}` WHERE token='$token';")) {
+		if (!$result = mysqli_query ($this->databaseConnection, "SELECT * FROM `{$this->votesTable}` WHERE token='$token';")) {
 			$html .= "\n<p><strong>ERROR:</strong> Vote read-back failed (1).</p>";
 			echo $html;
 			return false;
 		}
-		if (!$row = mysql_fetch_assoc ($result)) {
+		if (!$row = mysqli_fetch_assoc ($result)) {
 			$html .= "\n<p><strong>ERROR:</strong> Vote read-back failed (2).</p>";
 			echo $html;
 			return false;
@@ -2513,11 +2515,11 @@ class BOB
 		# Send the e-mail and confirm
 		#!# NB Mail domain of @cam.ac.uk is currently hard-coded
 		$subject = 'Online voting: ' . $this->config['title'] . ' [' . $this->config['id'] . ']';
-		$extraHeaders  = "From: {$this->config['emailTech']}\r\n";
+		$extraHeaders  = "From: no-reply@vote.downingjcr.co.uk\r\n";
 		if ($voterReceipt) {
 			$extraHeaders .= "BCC: {$this->username}@cam.ac.uk\r\n";
 		}
-		if (!mail ($this->config['emailReturningOfficer'], $subject, $message, $extraHeaders)) {
+		if (!mail ($this->config['emailReturningOfficer'], $subject, $message, $extraHeaders, '-f no-reply@vote.downingjcr.co.uk')) {
 			$html .= "\n<p><strong>ERROR:</strong> Enqueue voting confirmation e-mail failed.</p>";
 			echo $html;
 			return false;
@@ -2548,7 +2550,7 @@ class BOB
 	# Function to do a database rollback
 	private function doRollback ()
 	{
-		if (!mysql_query ('ROLLBACK;')) {
+		if (!mysqli_query ($this->databaseConnection, 'ROLLBACK;')) {
 			$this->error ('Unable to roll back the database transaction.');
 		}
 		
@@ -2753,18 +2755,19 @@ class BOB
 	private function getVoteData (&$errorMessage = false)
 	{
 		# Get the votes, and order them by token so that it is easier for voters to find their token in an alphabetical list
-		if(!($result = mysql_query ("SELECT * FROM `{$this->votesTable}`;"))) return ($this->error ("Vote list read failed."));
+		if(!($result = mysqli_query ($this->databaseConnection, "SELECT * FROM `{$this->votesTable}`;"))) return ($this->error ("Vote list read failed."));
 		
 		# Create an array of the fieldnames
 		$fieldnames = array ();
-		$fields = mysql_num_fields ($result);
+		$fields = mysqli_num_fields ($result);
 		for ($count = 0; $count < $fields; $count++) {
-			$fieldnames[] = mysql_field_name ($result, $count);
+			$properties = mysqli_fetch_field_direct($result, $count);
+			$fieldnames[] = $properties->name;
 		}
 		
 		# Create an array of the cast votes
 		$castVotes = array ();
-		while ($row = mysql_fetch_assoc ($result)) {
+		while ($row = mysqli_fetch_assoc ($result)) {
 			$token = array_shift ($row);	// Skip the token, but store it for use as an index
 			foreach ($row as $k => $v) {
 				$castVotes[$token][$k] = $v;
@@ -3347,12 +3350,12 @@ r.generateReport()
 		# Remind people that this is personal data
 		echo "\n<p><strong>Note:</strong> for reasons of data protection, this list of users that have voted is visible only to those on the electoral roll and to the election officials.</p>";
 		
-		if(!($result = mysql_query("SELECT username FROM `{$this->voterTable}` WHERE voted='1';"))) return($this->error ("Vote list read failed."));
+		if(!($result = mysqli_query($this->databaseConnection, "SELECT username FROM `{$this->voterTable}` WHERE voted='1';"))) return($this->error ("Vote list read failed."));
 		
 		#!# <pre> is generated still if no-one voted
 		echo "\n\n<pre>\n";
 		$count=1;
-		while($row = mysql_fetch_row($result)){
+		while($row = mysqli_fetch_row($result)){
 			echo $row[0];
 			if($count != $this->totalVoted) {
 				echo ',';
