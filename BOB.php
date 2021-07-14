@@ -1457,7 +1457,7 @@ class BOB
 		# Define the fields for the voter table, used below either for checking or table creation
 		$voterTableFields = array (
 			'username'	=> 'VARCHAR(16) collate utf8_unicode_ci NOT NULL PRIMARY KEY',	// Voter usernames
-			'voted'		=> 'TINYINT(4) DEFAULT 0',										// The flag for whether a voter has voted, defaulting to 0
+			'voted'		=> 'TINYINT DEFAULT 0',										// The flag for whether a voter has voted, defaulting to 0
 			'forename'	=> 'VARCHAR(255) collate utf8_unicode_ci',						// Forename (optional)
 			'surname'	=> 'VARCHAR(255) collate utf8_unicode_ci',						// Surname (optional)
 			'unit'		=> 'VARCHAR(255) collate utf8_unicode_ci',						// Organisational unit (optional), e.g. college
@@ -1501,7 +1501,7 @@ class BOB
 			$vote = $index + 1;	// Field names start at 1, not 0
 			$positionsAvailable = count ($election) - 1;					// Number of candidates, i.e. number of lines in the array minus the title
 			for ($position = 1; $position <= $positionsAvailable; $position++) {
-				$votesTableFields["v{$vote}p{$position}"] = 'TINYINT(4)';	// The list of cast ballots
+				$votesTableFields["v{$vote}p{$position}"] = 'TINYINT';	// The list of cast ballots
 			}
 		}
 		
