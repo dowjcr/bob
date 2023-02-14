@@ -1456,11 +1456,11 @@ class BOB
 		
 		# Define the fields for the voter table, used below either for checking or table creation
 		$voterTableFields = array (
-			'username'	=> 'VARCHAR(16) collate utf8_unicode_ci NOT NULL PRIMARY KEY',	// Voter usernames
+			'username'	=> 'VARCHAR(16) collate utf8mb3_unicode_ci NOT NULL PRIMARY KEY',	// Voter usernames
 			'voted'		=> 'TINYINT DEFAULT 0',										// The flag for whether a voter has voted, defaulting to 0
-			'forename'	=> 'VARCHAR(255) collate utf8_unicode_ci',						// Forename (optional)
-			'surname'	=> 'VARCHAR(255) collate utf8_unicode_ci',						// Surname (optional)
-			'unit'		=> 'VARCHAR(255) collate utf8_unicode_ci',						// Organisational unit (optional), e.g. college
+			'forename'	=> 'VARCHAR(255) collate utf8mb3_unicode_ci',						// Forename (optional)
+			'surname'	=> 'VARCHAR(255) collate utf8mb3_unicode_ci',						// Surname (optional)
+			'unit'		=> 'VARCHAR(255) collate utf8mb3_unicode_ci',						// Organisational unit (optional), e.g. college
 		);
 		
 		# Define the fields for the vote table, used below either for checking or table creation
@@ -1496,7 +1496,7 @@ class BOB
 	{
 		# Assemble the fields
 		$votesTableFields = array ();	// Explicit creation of an array; not necessary in the PHP language
-		$votesTableFields['token'] = 'VARCHAR(32) collate utf8_unicode_ci NOT NULL PRIMARY KEY';		// The token that the voter receives
+		$votesTableFields['token'] = 'VARCHAR(32) collate utf8mb3_unicode_ci NOT NULL PRIMARY KEY';		// The token that the voter receives
 		foreach ($this->config['electionInfo'] as $index => $election) {
 			$vote = $index + 1;	// Field names start at 1, not 0
 			$positionsAvailable = count ($election) - 1;					// Number of candidates, i.e. number of lines in the array minus the title
